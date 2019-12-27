@@ -72,25 +72,17 @@ namespace VSIX_Nuget
             PackageHelper.VsSolution = pSolution;
 
             InitPackageHelper();
+            InitOutputHelper();
+            
         }
-        ///使用同步加载的原因是防止一种情况：解决方案完成加载后，异步加载包的操作才完成，这样就监控不了解决方案了
-        //protected override void Initialize()
-        //{
-        //    IVsSolution pSolution = GetService(typeof(SVsSolution)) as IVsSolution;
-        //    object objLoadMgr = new MySolutionManager();   //the class that implements IVsSolutionManager
-        //                                                   //看看是否已经有solution load manager了
-        //    object loadManager;
-        //    int result = pSolution.GetProperty((int)__VSPROPID4.VSPROPID_ActiveSolutionLoadManager, out loadManager);
-        //    pSolution.SetProperty((int)__VSPROPID4.VSPROPID_ActiveSolutionLoadManager, objLoadMgr);
-        //    uint pdwCookie;
-        //    pSolution.AdviseSolutionEvents(new MySolutionEvents(), out pdwCookie);
-        //    //pSolution.AdviseSolutionEvents(new MyVsSolutionLoadEvents(), out pdwCookie);
-        //    //pSolution.SetProperty((int)__VSPROPID4.VSPROPID_ActiveSolutionLoadManager, new MyVsSolutionLoadEvents());
 
-        //    PackageHelper.VsSolution = pSolution;
-        //    InitPackageHelper();
-        //    base.Initialize();
-        //}
+        private void InitOutputHelper()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            IVsOutputWindow output = (IVsOutputWindow)GetService(typeof(SVsOutputWindow));
+            OutputHelper.OutputWindow = output;
+            OutputHelper.OutputMessageToPane("创建了一个Pane，这个Pane用于放入关于包更新的信息的，也是本扩展的信息\n");
+        }
 
         #endregion
 
@@ -102,31 +94,16 @@ namespace VSIX_Nuget
             IVsPackageInstallerServices installerServices = componentModel.GetService<IVsPackageInstallerServices>();
             PackageHelper.PackageInstallerServices = installerServices;
             PackageHelper.PackageInstaller = componentModel.GetService<IVsPackageInstaller2>();
-            //var installedPackages = installerServices.GetInstalledPackages();
             var nugetEvents = componentModel.GetService<IVsPackageInstallerEvents>();
             nugetEvents.PackageInstalled += NugetEvents_PackageInstalled;
         }
 
         private void NugetEvents_PackageInstalled(IVsPackageMetadata metadata)
         {
-            Guid guid = Guid.Empty;
-            Microsoft.VisualStudio.Shell.Interop.IEnumHierarchies en;
-            PackageHelper.VsSolution.GetProjectEnum((uint)__VSENUMPROJFLAGS.EPF_ALLINSOLUTION, ref guid, out en);
-            IVsHierarchy[] hierarchy = new IVsHierarchy[1];
-            uint fetched;
-            while (en.Next(1, hierarchy, out fetched) == VSConstants.S_OK && fetched == 1)
-            {
-                if (hierarchy.Length > 0 && hierarchy[0] != null)
-                {
-                    var proj = PackageHelper.GetDTEProject(hierarchy[0]);
-                    var allPackages = PackageHelper.GetInstalledPackages(proj);
-                    foreach (var vsPackageMetadata in allPackages)
-                    {
-                        PackageHelper.InstallPackageToProject(proj, vsPackageMetadata.Id);
-                    }
-                }
-
-            }
+            //有可能出现这种情况：解决方案已经加载完成了，还没加载此包，
+            //导致在解决方案加载完整事件时，不能更新所有项目的引用包
+            //所以在这里更新包一次
+            PackageHelper.UpdateAllPackagesOfAllProjects();
         }
     }
 }
