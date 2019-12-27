@@ -1,11 +1,12 @@
 ﻿using System;
+using System.Threading.Tasks;
 using EnvDTE;
 using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.Shell.Interop;
 
 namespace VSIX_Nuget
 {
-    public class MySolutionEvents: IVsSolutionEvents, IVsSolutionLoadEvents
+    public class MySolutionEvents : IVsSolutionEvents, IVsSolutionLoadEvents
     {
         #region Implementation of IVsSolutionEvents
 
@@ -40,12 +41,12 @@ namespace VSIX_Nuget
             //        {
             //            Console.WriteLine(e);
             //        }
-                   
+
             //    }
             //}
 
             //throw new System.NotImplementedException();
-               
+
 
             return 0;
         }
@@ -97,8 +98,8 @@ namespace VSIX_Nuget
             //    }
 
             //}
-            
-                
+
+
             return 0;
         }
 
@@ -146,27 +147,44 @@ namespace VSIX_Nuget
             throw new NotImplementedException();
         }
 
-        public int OnAfterBackgroundSolutionLoadComplete()
+        public int  OnAfterBackgroundSolutionLoadComplete()
         {
-            //Guid guid = Guid.Empty;
-            //Microsoft.VisualStudio.Shell.Interop.IEnumHierarchies en;
-            //PackageHelper.VsSolution.GetProjectEnum((uint)__VSENUMPROJFLAGS.EPF_ALLINSOLUTION, ref guid, out en);
-            //IVsHierarchy[] hierarchy = new IVsHierarchy[1];
-            //uint fetched;
-            //while (en.Next(1, hierarchy, out fetched) == VSConstants.S_OK && fetched == 1)
-            //{
-            //    if (hierarchy.Length > 0 && hierarchy[0] != null)
-            //    {
-            //        var proj = PackageHelper.GetDTEProject(hierarchy[0]);
-            //        var allPackages = PackageHelper.GetInstalledPackages(proj);
-            //        foreach (var vsPackageMetadata in allPackages)
-            //        {
-            //            PackageHelper.InstallPackageToProject(proj, vsPackageMetadata.Id);
-            //        }
-            //    }
+            Guid guid = Guid.Empty;
+            Microsoft.VisualStudio.Shell.ThreadHelper.ThrowIfNotOnUIThread();
+            try
+            {
+                PackageHelper.VsSolution.GetProjectEnum((uint)__VSENUMPROJFLAGS.EPF_ALLINSOLUTION, ref guid, out var en);
+                IVsHierarchy[] hierarchy = new IVsHierarchy[1];
+                uint fetched;
+                while (en.Next(1, hierarchy, out fetched) == VSConstants.S_OK && fetched == 1)
+                {
+                    if (hierarchy.Length > 0 && hierarchy[0] != null)
+                    {
+                        var proj = PackageHelper.GetDTEProject(hierarchy[0]);
+                        try
+                        {
+                            var allPackages = PackageHelper.GetInstalledPackages(proj);
+                            foreach (var vsPackageMetadata in allPackages)
+                            {
+                                PackageHelper.InstallPackageToProject(proj, vsPackageMetadata.Id);
+                            }
+                        }
+                        catch (Exception e)
+                        {//getting packages of dotnet core targeted project  is thrown exception here
+                            Console.WriteLine(e);
+                        }
 
-            //}
-            return VSConstants.S_OK;
+                    }
+
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+                throw;
+            }
+            
+            return VSConstants.S_OK; 
         }
 
         #endregion

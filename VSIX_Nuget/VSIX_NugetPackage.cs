@@ -28,11 +28,13 @@ namespace VSIX_Nuget
     /// To get loaded into VS, the package must be referred by &lt;Asset Type="Microsoft.VisualStudio.VsPackage" ...&gt; in .vsixmanifest file.
     /// </para>
     /// </remarks>
-    //[PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
-    [Guid(VSIX_NugetPackage.PackageGuidString)]
+    [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
     [ProvideAutoLoad(VSConstants.UICONTEXT.NoSolution_string, PackageAutoLoadFlags.BackgroundLoad)]
-    //[ProvideAutoLoad(UIContextGuids80.SolutionExists)]
-    public sealed class VSIX_NugetPackage : Package//AsyncPackage
+    [Guid(VSIX_NugetPackage.PackageGuidString)]
+    //[ProvideAutoLoad(VSConstants.UICONTEXT.NoSolution_string, PackageAutoLoadFlags.BackgroundLoad)]
+    
+    public sealed class VSIX_NugetPackage : AsyncPackage
+    //public sealed class VSIX_NugetPackage : Package
     {
         //public const string UiContextGuidString = VSConstants.UICONTEXT_SolutionExists.ToString();
         /// <summary>
@@ -51,42 +53,44 @@ namespace VSIX_Nuget
         /// <param name="cancellationToken">A cancellation token to monitor for initialization cancellation, which can occur when VS is shutting down.</param>
         /// <param name="progress">A provider for progress updates.</param>
         /// <returns>A task representing the async work of package initialization, or an already completed task if there is none. Do not return null from this method.</returns>
-        //protected override async Task InitializeAsync(CancellationToken cancellationToken, IProgress<ServiceProgressData> progress)
-        //{
-        //    Console.WriteLine("111111111111111111111111111111111111111111111111111111111111");
-
-        //    IVsSolution pSolution = GetService(typeof(SVsSolution)) as IVsSolution;
-        //    object objLoadMgr = new MySolutionManager();   //the class that implements IVsSolutionManager
-        //    //看看是否已经有solution load manager了
-        //    object loadManager;
-        //    int result = pSolution.GetProperty((int)__VSPROPID4.VSPROPID_ActiveSolutionLoadManager, out loadManager);
-        //    pSolution.SetProperty((int)__VSPROPID4.VSPROPID_ActiveSolutionLoadManager, objLoadMgr);
-        //    uint pdwCookie;
-        //    pSolution.AdviseSolutionEvents(new MySolutionEvents(), out pdwCookie);
-
-        //    // When initialized asynchronously, the current thread may be a background thread at this point.
-        //    // Do any initialization that requires the UI thread after switching to the UI thread.
-        //    await this.JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
-
-        //}
-        ///使用同步加载的原因是防止一种情况：解决方案完成加载后，异步加载包的操作才完成，这样就监控不了解决方案了
-        protected override void Initialize()
+        protected override async Task InitializeAsync(CancellationToken cancellationToken, IProgress<ServiceProgressData> progress)
         {
+            Console.WriteLine("111111111111111111111111111111111111111111111111111111111111");
+
+            // When initialized asynchronously, the current thread may be a background thread at this point.
+            // Do any initialization that requires the UI thread after switching to the UI thread.
+            await this.JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
+            PackageHelper.JoinableTaskFactory = this.JoinableTaskFactory;
             IVsSolution pSolution = GetService(typeof(SVsSolution)) as IVsSolution;
             object objLoadMgr = new MySolutionManager();   //the class that implements IVsSolutionManager
-                                                           //看看是否已经有solution load manager了
+            //看看是否已经有solution load manager了
             object loadManager;
             int result = pSolution.GetProperty((int)__VSPROPID4.VSPROPID_ActiveSolutionLoadManager, out loadManager);
             pSolution.SetProperty((int)__VSPROPID4.VSPROPID_ActiveSolutionLoadManager, objLoadMgr);
             uint pdwCookie;
             pSolution.AdviseSolutionEvents(new MySolutionEvents(), out pdwCookie);
-            //pSolution.AdviseSolutionEvents(new MyVsSolutionLoadEvents(), out pdwCookie);
-            //pSolution.SetProperty((int)__VSPROPID4.VSPROPID_ActiveSolutionLoadManager, new MyVsSolutionLoadEvents());
-
             PackageHelper.VsSolution = pSolution;
+
             InitPackageHelper();
-            base.Initialize();
         }
+        ///使用同步加载的原因是防止一种情况：解决方案完成加载后，异步加载包的操作才完成，这样就监控不了解决方案了
+        //protected override void Initialize()
+        //{
+        //    IVsSolution pSolution = GetService(typeof(SVsSolution)) as IVsSolution;
+        //    object objLoadMgr = new MySolutionManager();   //the class that implements IVsSolutionManager
+        //                                                   //看看是否已经有solution load manager了
+        //    object loadManager;
+        //    int result = pSolution.GetProperty((int)__VSPROPID4.VSPROPID_ActiveSolutionLoadManager, out loadManager);
+        //    pSolution.SetProperty((int)__VSPROPID4.VSPROPID_ActiveSolutionLoadManager, objLoadMgr);
+        //    uint pdwCookie;
+        //    pSolution.AdviseSolutionEvents(new MySolutionEvents(), out pdwCookie);
+        //    //pSolution.AdviseSolutionEvents(new MyVsSolutionLoadEvents(), out pdwCookie);
+        //    //pSolution.SetProperty((int)__VSPROPID4.VSPROPID_ActiveSolutionLoadManager, new MyVsSolutionLoadEvents());
+
+        //    PackageHelper.VsSolution = pSolution;
+        //    InitPackageHelper();
+        //    base.Initialize();
+        //}
 
         #endregion
 
@@ -97,6 +101,7 @@ namespace VSIX_Nuget
             var componentModel = (IComponentModel)GetService(typeof(SComponentModel));
             IVsPackageInstallerServices installerServices = componentModel.GetService<IVsPackageInstallerServices>();
             PackageHelper.PackageInstallerServices = installerServices;
+            PackageHelper.PackageInstaller = componentModel.GetService<IVsPackageInstaller2>();
             //var installedPackages = installerServices.GetInstalledPackages();
             var nugetEvents = componentModel.GetService<IVsPackageInstallerEvents>();
             nugetEvents.PackageInstalled += NugetEvents_PackageInstalled;
